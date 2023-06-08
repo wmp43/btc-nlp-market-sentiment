@@ -44,7 +44,7 @@ def parse_date(date_str, index):
         return None
 
 
-def join_data():
+def concat_news_data():
     csv_files = glob.glob("data/scraped_chunks/" + "scraped_news_data_*.csv")
     csv_files.sort()
     news_data_scraped = pd.DataFrame()
@@ -78,7 +78,46 @@ def join_data():
 
     return news_data_scraped.to_csv("data/concatenated_news_data.csv", index=False)
 
-#join_data()
+
+def join_data_one_article_per_row():
+    article_df = pd.read_csv('data/concatenated_news_data.csv')
+    price_df = pd.read_csv('data/btc_data.csv')
+    if article_df['date'].dtype != price_df['t'].dtype:
+        article_df['date'] = pd.to_datetime(article_df['date'])
+        price_df['t'] = pd.to_datetime(price_df['t'])
+
+    merged_df = pd.merge(article_df, price_df, left_on='date', right_on='t', how='left')
+    merged_df.drop(['t'], axis = 1)
+    merged_df.to_csv('final_data/joined_article_per_observation.csv', index = False)
+    return merged_df
+
+#join_data_one_article_per_row()
+
+def join_data_one_day_per_row():
+    article_df = pd.read_csv('data/concatenated_news_data.csv')
+    price_df = pd.read_csv('data/btc_data.csv')
+    
+    if article_df['date'].dtype != price_df['t'].dtype:
+        article_df['date'] = pd.to_datetime(article_df['date'])
+        price_df['t'] = pd.to_datetime(price_df['t'])
+
+    article_df['text'] = article_df['text'].astype(str)
+    article_df['titles'] = article_df['titles'].astype(str)
+
+    articles_grouped = article_df.groupby('date').agg({'titles': ' '.join, 'text': ' '.join}).reset_index()
+
+    merged_df = pd.merge(articles_grouped, price_df, left_on='date', right_on='t', how='left')
+    merged_df['text'] = merged_df['text'].fillna(merged_df['titles'])
+    merged_df.drop('t', axis=1, inplace=True)  # Drop the 't' column from merged_df
+
+    merged_df.to_csv('final_data/joined_day_per_observation.csv', index=False)
+    return merged_df
+
+join_data_one_day_per_row()
+
+
+
+
 
 
 #Tried to find the most common 3 word strings at the start and end, but the result was simply not good enough

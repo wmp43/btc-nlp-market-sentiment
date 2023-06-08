@@ -1,7 +1,8 @@
 import requests
 import pandas as pd
 import time
-from config import api_key, time_from, output_size, brave_binary, driver_path
+import json
+from config import api_key, time_from, output_size, brave_binary, driver_path, glassnode_api_key
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -67,6 +68,7 @@ def get_historical_btc_data(api_key, output_size):
     '''
     API Calls for historical BTC DATA
     Adds to dataframe
+    Seems like this API is down or has changed
     '''
     global news_data
 
@@ -75,6 +77,7 @@ def get_historical_btc_data(api_key, output_size):
     try:
         response = requests.get(btc_url)
         data = response.json()
+        print(data)
         btc_prices = data['Time Series (Digital Currency Daily)']
         
         for date, price in btc_prices.items():
@@ -84,8 +87,24 @@ def get_historical_btc_data(api_key, output_size):
     except requests.exceptions.RequestException as e:
         print(f'Request Error: {e}')
     
-    print(btc_price_data)
+    btc_price_data.to_csv('data/btc_data', index = False)
     return btc_price_data
+
+def glassnode_data(glassnode_api_key):
+    urls = ['https://api.glassnode.com/v1/metrics/addresses/active_count',
+    'https://api.glassnode.com/v1/metrics/market/price_usd_close']
+    data = []
+    for url in urls:
+        label = url.split('/')[-1]
+        res = requests.get(url, params = {'a':'BTC','api_key': glassnode_api_key})
+        df = pd.read_json(res.text, convert_dates=['t'])
+        df.set_index('t', inplace = True)
+        df.rename(columns = {'v':label}, inplace = True)
+        data.append(df)
+    
+    df = pd.concat(data, axis=1)
+    df.to_csv('btc_data.csv')
+    return df
 
 
 def fetch_all_data(api_key, time_from, output_size):
@@ -158,18 +177,18 @@ chunk_size = 100
 total_records = len(news_data)
 output_filename = 'scraped_news_data.csv'
 
-for i in range(3700, total_records, chunk_size):
-    start_index = i
-    end_index = min(start_index + chunk_size, total_records)
+# for i in range(3756, total_records, chunk_size):
+#     start_index = i
+#     end_index = min(start_index + chunk_size, total_records)
 
-    output_filename = f"data/scraped_chunks/scraped_news_data_{start_index+1}-{end_index}.csv"  # Dynamic output filename
+#     output_filename = f"data/scraped_chunks/scraped_news_data_{start_index+1}-{end_index}.csv"  # Dynamic output filename
 
-    chunk = news_data.iloc[start_index:end_index, :]
-    chunk['text'] = chunk.apply(lambda x: scrape_text(x['url'], x.name), axis=1)
-    chunk.to_csv(output_filename, index=False)
+#     chunk = news_data.iloc[start_index:end_index, :]
+#     chunk['text'] = chunk.apply(lambda x: scrape_text(x['url'], x.name), axis=1)
+#     chunk.to_csv(output_filename, index=False)
 
-    print(f"Scraped data saved to {output_filename} - Rows: {start_index+1} to {end_index} out of {total_records}")
-driver.quit()
+#     print(f"Scraped data saved to {output_filename} - Rows: {start_index+1} to {end_index} out of {total_records}")
+# driver.quit()
 
 def btc_fear_greed_idx():
     return #some api call
