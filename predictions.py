@@ -1,186 +1,105 @@
-'''
-- BTC Price Predictions using the URL and Title
-- Scikit-Learn Time Series methods
-- Maybe a 1d covnet??
-'''
-import ssl
-
-try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-
 import pandas as pd
-import numpy as np
-from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-import xgboost as xgb
+from sklearn.feature_extraction.text import TfidfVectorizer
+import numpy as np
 from gensim.models import Word2Vec
-from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
-import ast
+import xgboost as xgb
 
-
-
-
-
-def preprocess_text(texts):
-    tokenized_texts = [word_tokenize(text) for text in texts]
+def preprocess_text(data_path):
+    df = pd.read_csv(data_path)  # Assuming the data is stored in a CSV file
     lemmatizer = WordNetLemmatizer()
-    lemmatized_tokens = [[lemmatizer.lemmatize(token) for token in tokens] for tokens in tokenized_texts]
-    processed_texts = [' '.join(tokens) for tokens in lemmatized_tokens]
-    model = Word2Vec(lemmatized_tokens, min_count=3)
-    word2vec = np.array([model.wv[tokens] for tokens in lemmatized_tokens], dtype=np.float32)
-    return processed_texts, word2vec
+    
+    df['tokenized_text'] = df['titles'].apply(lambda text: word_tokenize(text.lower()))
+    df['lemmatized_tokens'] = df['tokenized_text'].apply(lambda tokens: [lemmatizer.lemmatize(token) for token in tokens])
+    df['processed_text'] = df['lemmatized_tokens'].apply(lambda tokens: ' '.join(tokens))
+    df.to_csv('df_text.csv')    
+    return df
 
-def compute_tfidf_matrix(processed_texts, word2vec_data):
+def compute_tfidf(df):
     vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(processed_texts).toarray()
+    tfidf_matrix = vectorizer.fit_transform(df['processed_text']).toarray()
+    tfidf_df = pd.DataFrame(tfidf_matrix)
+    tfidf_df['date'] = df.index
+    tfidf_df.to_csv('tf_idf_df.csv')
+    print(len(tfidf_df))
+    return tfidf_df
 
-    word2vec_df = pd.DataFrame({'word2vec': word2vec_data})
+def compute_word2vec(df):
+    preprocessed_sentences = [text.split() for text in df['processed_text']]
+    model = Word2Vec(preprocessed_sentences, window=5, min_count=3, workers=4)
+    word2vec_vectors = []
+    for index, row in df.iterrows():
+        processed_text = row['processed_text']
+        words = processed_text.split()
 
-    tfidf_w2v_df = pd.DataFrame(tfidf_matrix)
-    tfidf_w2v_df = pd.concat([tfidf_w2v_df, word2vec_df], axis=1)
-    tfidf_w2v_df.to_csv('tfidf_w2v_data.csv')
+        word_vectors = [model.wv[word] for word in words if word in model.wv]
+        word2vec_vector = np.mean(word_vectors, axis = 0)
+        word2vec_vectors.append(word2vec_vector)
 
-    return tfidf_w2v_df
+    word2vec_array = np.array(word2vec_vectors, dtype = np.float64).mean(axis = 1)
+    new_df = pd.DataFrame({'date': df['date'], 'word2vec': word2vec_array})
+    new_df.to_csv('w2v_data.csv', index = False)
+    print(len(new_df))
+    return new_df
 
+def join_tfidf_w2v(tfidf_data, w2v_data, df):
+    new_df = pd.DataFrame({
+        'active_wallets': df['active_count'],
+        'price_close': df['price_usd_close'],
+        'word2vec': w2v_data['word2vec']})
+    merged_df = pd.concat([tfidf_data, new_df], axis = 1)
+    merged_df.to_csv('final_data/processed_tfidf_w2v.csv')
+    print(len(merged_df))
+    return merged_df
 
-def time_series_train_test_split(data, tfidf_w2v_data, test_size, validate_size):
-    num_rows = len(data)
-    num_test = int(num_rows * test_size)
-    num_validate = int(num_rows * validate_size)
+def perform_grid_search(df):
+    features = df.drop(columns = 'price_close')
+    target = df['price_close']
 
-    train_data, temp_data = train_test_split(data, test_size=num_test+num_validate, shuffle=False)
-    test_data, validate_data = train_test_split(temp_data, test_size=num_validate, shuffle=False)
-
-    train_set = train_data.copy()
-    test_set = test_data.copy()
-    validate_set = validate_data.copy()
-
-    # Merge the TF-IDF matrix and Word2Vec data with the corresponding sets
-    train_set = pd.merge(train_set[['active_count', 'price_usd_close']], tfidf_w2v_data, left_index=True, right_index=True)
-    test_set = pd.merge(test_set[['active_count', 'price_usd_close']], tfidf_w2v_data, left_index=True, right_index=True)
-    validate_set = pd.merge(validate_set[['active_count', 'price_usd_close']], tfidf_w2v_data, left_index=True, right_index=True)
-
-    train_set.to_csv('final_data/final_train.csv')
-    test_set.to_csv('final_data/final_test.csv')
-    validate_set.to_csv('final_data/final_validate.csv')
-
-    return train_set, test_set, validate_set
-
-
-
-def perform_grid_search(train_set, test_set):
-    # Extract features and target variable from train_set, test_set, and validate_set
-    train_features = train_set[['active_count', 'tfidf_matrix', 'word2vec']]
-    train_target = train_set['price_usd_close']
-
-    test_features = test_set[['active_count', 'tfidf_matrix', 'word2vec']]
-    test_target = test_set['price_usd_close']
-
-
-    # Define the parameter grid for grid search
     param_grid = {
-        'eta': [0.1, 0.2, 0.3],
-        'max_depth': [4, 6, 8],
-        'subsample': [0.6, 0.8, 1.0],
-        'colsample_bytree': [0.6, 0.8, 1.0]
+        'eta': [0.5,0.6,0.7],
+        'max_depth': [10,12,14,16],
+        'subsample': [0.8],
+        'colsample_bytree': [1.0]
     }
 
-    # Create the XGBoost model
-    model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric='rmse')
+    model = xgb.XGBRegressor(objective='reg:squarederror', eval_metric=['rmse'])
 
     tscv = TimeSeriesSplit(n_splits=3)
 
-    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, scoring='neg_root_mean_squared_error', cv=tscv)
+    grid_search = GridSearchCV(estimator=model, param_grid=param_grid, 
+    scoring='neg_root_mean_squared_error', 
+    cv=tscv,
+    verbose=2)
 
-    # Fit the grid search on the training data
-    grid_search.fit(train_features, train_target)
+    grid_search.fit(features, target)
 
-    # Print the best parameters and best score
     print("Best parameters: ", grid_search.best_params_)
     print("Best score on validation set: ", -grid_search.best_score_)
-
-    # Evaluate the model on the test set using the best parameters
-    best_model = grid_search.best_estimator_
-    test_score = best_model.score(test_features, test_target)
-    print("Score on test set: ", test_score)
-
-    return grid_search.best_params_, -grid_search.best_score_, test_score
-
-
-df = pd.read_csv('final_data/joined_day_per_observation.csv')
-df['processed_text'], df['word2vec'] = zip(*df['titles'].apply(preprocess_text))
-
-tfidf_w2v_data = compute_tfidf_matrix(df['processed_text'], df['word2vec'])
-
-train_set, test_set, validate_set = time_series_train_test_split(df, tfidf_w2v_data, test_size=0.2, validate_size=0.1)
-
-best_params, best_score, test_score = perform_grid_search(train_set, test_set)
+    return grid_search.best_params_, -grid_search.best_score_
 
 
 
+text_df = preprocess_text('final_data/joined_day_per_observation.csv')
+tfidf = compute_tfidf(text_df)
+w2v = compute_word2vec(text_df)
+processed_df = join_tfidf_w2v(tfidf, w2v, text_df)
+best_params, best_score = perform_grid_search(processed_df)
 
+btc_prices = processed_df['price_close']
 
+btc_std = np.std(btc_prices)
+rmse = best_score
 
+if rmse < btc_std:
+    print("The model's predictions have a lower error than the standard deviation of Bitcoin prices.")
+elif rmse > btc_std:
+    print("The model's predictions have a higher error than the standard deviation of Bitcoin prices.")
+else:
+    print("The model's predictions have a similar error as the standard deviation of Bitcoin prices.")
 
-
-
-
-
-# def train_and_evaluate_model(train_set, test_set, validate_set, tfidf_data):
-#     # Get the predictor columns from the train_set
-#     predictors = train_set[['active_count']].copy()
-
-#     # Merge the Word2Vec data and TF-IDF data with the train, test, and validate sets
-#     predictors = predictors.merge(train_set['word2vec_text'], left_index=True, right_index=True)
-#     predictors = predictors.merge(tfidf_data, left_index=True, right_index=True)
-#     test_set = test_set.merge(test_set['word2vec_text'], left_index=True, right_index=True)
-#     test_set = test_set.merge(tfidf_data, left_index=True, right_index=True)
-#     validate_set = validate_set.merge(validate_set['word2vec_text'], left_index=True, right_index=True)
-#     validate_set = validate_set.merge(tfidf_data, left_index=True, right_index=True)
-
-#     target = train_set['price_usd_close']
-    
-#     # Convert the predictor and target data to DMatrix format
-#     train_data = xgb.DMatrix(train_set[['active_count', 'word2vec_text', '']])
-#     test_data = xgb.DMatrix(test_set[predictors.columns], enable_categorical=True)
-#     validate_data = xgb.DMatrix(validate_set[predictors.columns], enable_categorical=True)
-    
-#     # Set the parameters for XGBoost
-#     params = {
-#         'objective': 'reg:squarederror',
-#         'eval_metric': 'rmse',
-#         # Add other parameters as needed
-#     }
-    
-#     # Train the model
-#     model = xgb.train(params, train_data)
-    
-#     # Make predictions on the test and validate sets
-#     test_predictions = model.predict(test_data)
-#     validate_predictions = model.predict(validate_data)
-    
-#     # Calculate and print the RMSE scores
-#     test_rmse = mean_squared_error(test_set['price_usd_close'], test_predictions, squared=False)
-#     validate_rmse = mean_squared_error(validate_set['price_usd_close'], validate_predictions, squared=False)
-    
-#     print("Test RMSE:", test_rmse)
-#     print("Validate RMSE:", validate_rmse)
-
-
-
-# df = pd.read_csv('final_data/joined_day_per_observation.csv')
-# df['processed_text'], df['word2vec_text'] = zip(*df['titles'].apply(preprocess_text))
-
-# tfidf_data = compute_tfidf_matrix(df)
-
-# train_set, test_set, validate_set = time_series_train_test_split(df, tfidf_data, df['word2vec_text'], test_size=0.2, validate_size=0.1)
-
-# train_and_evaluate_model(df, train_set, test_set, validate_set, tfidf_data)
-
+print("Standard Deviation of Bitcoin Prices:", btc_std)
+print("RMSE of Model's Predictions:", rmse)
+print("params of best Model:", best_params)
