@@ -1,21 +1,27 @@
-import requests
+import requests 
 import pandas as pd
 import time
+from config import api_key, time_from, db_name, raw_table_name, cryptobert_url, hugging_face_token, trad_url
+import sqlite3
+from newspaper import Article
+from concurrent.futures import ThreadPoolExecutor
+import numpy as np
 import json
-from config import api_key, time_from, output_size, brave_binary, driver_path, glassnode_api_key
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from bs4 import BeautifulSoup
-import re
 
+def parse_float_date(date_str):
+    print(date_str)
+    return pd.to_datetime(date_str, format='%Y-%m-%d').strftime('%Y-%m-%d')
+
+def parse_date(date_str):
+    date_str = str(date_str)
+    if len(date_str) == 15:
+        date_str = date_str[:-7]
+    elif len(date_str) == 13:
+        date_str = date_str[:-5]
+
+    return pd.to_datetime(date_str, format='%Y%m%d').strftime('%Y-%m-%d')
 
 news_data = pd.DataFrame(columns=['titles', 'url', 'time_published'])
-
 def get_news_data(api_key, time_from):
     '''
     - Generates Global datafram
@@ -26,7 +32,7 @@ def get_news_data(api_key, time_from):
     - Returns final dataframe with about 3600 rows as of June 2nd 2023
     '''
     global news_data
-    url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=COIN,CRYPTO:BTC&time_from={time_from}&sort=earliest&topics=blockchain&apikey={api_key}&limit=200'
+    url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=COIN,CRYPTO:BTC&time_from={time_from}&sort=earliest&topics=blockchain&limit=1000&apikey={api_key}'
     r = requests.get(url)
     data = r.json()
 
@@ -48,147 +54,105 @@ def get_news_data(api_key, time_from):
 
         temp_df = pd.DataFrame({'titles': titles, 'url': urls, 'time_published': time_published})
         news_data = news_data.append(temp_df, ignore_index = True)
-        print(news_data)
-        #For some reason the api outputs time_publshed in a format that cannot be feed back into the api call
         next_start = news_data['time_published'].iloc[-1][:-6] + '0000'
+        print(f'news data:{news_data}')
 
         if len(temp_df)<10:
-            print('Final df:')
-            print(news_data)
             return news_data
         else:
-            #api has a 15 second cool down
-            print('Waiting')
+            print('waiting 17 seconds')
             time.sleep(17)
-            print('Fetching New Data')
             return get_news_data(api_key, next_start)
-            
 
-def get_historical_btc_data(api_key, output_size):
+def get_historical_btc_data(api_key):
     '''
     API Calls for historical BTC DATA
     Adds to dataframe
     Seems like this API is down or has changed
     '''
-    global news_data
-
-    btc_url = f'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey={api_key}&outputsize={output_size}'
-    btc_price_data = pd.DataFrame(columns=['Date', 'Close Price'])
+    btc_url = f'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey={api_key}&outputsize=full'
+    btc_price_data = pd.DataFrame(columns=['date', 'price'])
     try:
         response = requests.get(btc_url)
         data = response.json()
-        print(data)
         btc_prices = data['Time Series (Digital Currency Daily)']
         
         for date, price in btc_prices.items():
             close_price = price['4a. close (USD)']
-            btc_price_data = btc_price_data.append({'Date': date, 'Close Price': close_price}, ignore_index=True)
+            btc_price_data = btc_price_data.append({'date': date, 'price': close_price}, ignore_index=True)
     
     except requests.exceptions.RequestException as e:
         print(f'Request Error: {e}')
     
-    btc_price_data.to_csv('data/btc_data', index = False)
     return btc_price_data
 
-def glassnode_data(glassnode_api_key):
-    urls = ['https://api.glassnode.com/v1/metrics/addresses/active_count',
-    'https://api.glassnode.com/v1/metrics/market/price_usd_close']
-    data = []
-    for url in urls:
-        label = url.split('/')[-1]
-        res = requests.get(url, params = {'a':'BTC','api_key': glassnode_api_key})
-        df = pd.read_json(res.text, convert_dates=['t'])
-        df.set_index('t', inplace = True)
-        df.rename(columns = {'v':label}, inplace = True)
-        data.append(df)
-    
-    df = pd.concat(data, axis=1)
-    df.to_csv('btc_data.csv')
+def merge_data(btc_data, news_data):
+    '''
+    parses date for join on date. 
+    '''
+    print(type(btc_data['date'][0]))
+    print(btc_data['date'][0])
+    news_data['time_published'] = news_data['time_published'].apply(parse_date)
+    btc_data['date'] = btc_data['date'].apply(parse_float_date)
+
+    merged_data = pd.merge(news_data, btc_data, left_on='time_published', right_on='date', how='inner')
+    merged_data.drop_duplicates(subset='titles', keep='first', inplace=True)
+    merged_data.drop('date', axis=1, inplace=True)
+    return merged_data
+
+def extract_text(url):
+    counter = 0
+    try:
+        article = Article(url)
+        article.download()
+        article.parse()
+        return article.text
+    except:
+        print(f'Not availble @{url}')
+        counter += 1
+    print(f'{counter} URLS not Availble')
+
+def extract_content(df):
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        df['content'] = list(executor.map(extract_text, df['url']))
+    df.dropna(subset=['content'], inplace=True)
     return df
 
-
-def fetch_all_data(api_key, time_from, output_size):
-    get_news_data(api_key, time_from)
-    btc_data = get_historical_btc_data(api_key, output_size)
-    news_data.to_csv('data/news_data.csv', index=False)
-    btc_data.to_csv('data/btc_data', index = False)
-    return news_data, btc_data
-
-news_data = pd.read_csv('news_data.csv')
-
-chrome_options = Options()
-chrome_options.add_argument('--headless')
-chrome_options.add_argument('--disable-javascript')
-
-chrome_options.binary_location = brave_binary
-
-service = Service(driver_path)
-driver = webdriver.Chrome(service=service, options=chrome_options)
-
-def scrape_text(url, index, retry_count=0):
+def df_to_db(merged_data, db_name, raw_table_name):
     '''
-    - Scrapes URLs and returns the main body of the article
-    - Can use lambda function after to apply this function
+    Send Data to SQLite db under raw-btc-price-news
     '''
-    driver.get(url)
-    driver.execute_script('window.onload=function(){};')
+    merged_data.rename(columns={'Unnamed: 0': 'Index'}, inplace=True)
+    merged_data['price'] = np.round(merged_data['price'].astype(float), 2)
 
-    print(f"Scraping URL at index {index}: {url}")
+    conn = sqlite3.connect(db_name)
+    merged_data.to_sql(raw_table_name, conn, if_exists='append', index=False)
+    conn.close()
 
-    start_time = time.time()
+def ingestion_master(api_key, time_from, db_name, raw_table_name):
+    news_data = get_news_data(api_key, time_from)    
+    btc_data = get_historical_btc_data(api_key)
+    merged_df = merge_data(btc_data, news_data)
+    all_raw_data = extract_content(merged_df)
+    df_to_db(all_raw_data, db_name, raw_table_name)
+    return print('check SQLite!')
 
-    try:
-        # Wait for the body element to be present
-        body_element = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, '//body'))
-        )
-        html_content = body_element.get_attribute('innerHTML')
-        soup = BeautifulSoup(html_content, 'html.parser')
-        text = soup.get_text(separator=' ')
-        text = re.sub(r'\n', '', text)  # Remove newlines
-        text = re.sub(r'\s+', ' ', text)  # Replace multiple whitespaces with a single whitespace
+#ingestion_master(api_key, time_from, db_name, raw_table_name)
 
-        # Extract relevant portion based on title
-        title = news_data.loc[index, 'titles']
-        if title in text:
-            text = text.split(title, 1)[1].strip()
-        
-    except (NoSuchElementException, TimeoutException) as e:
-        print(f"Encountered an error while scraping URL at index {index}: {url}")
-        print(f"Error: {str(e)}")
-        # Retry the scraping after a delay
-        if retry_count < 5:  # Maximum number of retries
-            retry_count += 1
-            print(f"Retrying in 20 seconds... (Retry count: {retry_count})")
-            time.sleep(20)
-            return scrape_text(url, index, retry_count)
-        else:
-            print(f"Maximum number of retries reached. Skipping URL at index {index}: {url}")
-            return ""
+def btc_fear_greed_idx(rapid_api):
+    url = "https://fear-and-greed-index.p.rapidapi.com/v1/fgi"
+    headers = {
+        "X-RapidAPI-Key": rapid_api,
+        "X-RapidAPI-Host": "fear-and-greed-index.p.rapidapi.com"
+    }
+    response = requests.get(url, headers=headers)
+    data = response.json()
 
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print(f"Execution time for URL at index {index}: {url} - {execution_time} seconds")
-
-    return text
-
-
-chunk_size = 100
-total_records = len(news_data)
-output_filename = 'scraped_news_data.csv'
-
-# for i in range(3756, total_records, chunk_size):
-#     start_index = i
-#     end_index = min(start_index + chunk_size, total_records)
-
-#     output_filename = f"data/scraped_chunks/scraped_news_data_{start_index+1}-{end_index}.csv"  # Dynamic output filename
-
-#     chunk = news_data.iloc[start_index:end_index, :]
-#     chunk['text'] = chunk.apply(lambda x: scrape_text(x['url'], x.name), axis=1)
-#     chunk.to_csv(output_filename, index=False)
-
-#     print(f"Scraped data saved to {output_filename} - Rows: {start_index+1} to {end_index} out of {total_records}")
-# driver.quit()
-
-def btc_fear_greed_idx():
-    return #some api call
+    fgi_val = data['fgi']['now']['value']
+    fgi_txt = data['fgi']['now']['valueText']
+    
+    return fgi_val, fgi_txt
+#Summaries Should be done before ts data is set up. 
+#Model will preform better because they are coherent artilces
+#Can set max len of the summaries to be (num articles)d/avg len(articles)d where d is a day 
+#Then Concat the summaries
