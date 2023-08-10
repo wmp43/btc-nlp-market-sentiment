@@ -11,6 +11,7 @@ import time
 import numpy as np
 from transformers import BertTokenizer
 
+
 def db_ingestion(db_name, processed_table_name):
     '''
     Get Data From DB to process for Model
@@ -20,25 +21,26 @@ def db_ingestion(db_name, processed_table_name):
 
     query = f'SELECT * FROM {processed_table_name}'
 
-    df = pd.read_sql_query(query, conn) 
+    df = pd.read_sql_query(query, conn)
     conn.close()
     print('closed sqlite connection')
     return df
+
 
 def preprocess_text(df):
     start_time = time.time()
     lemmatizer = WordNetLemmatizer()
     df['combined_text'] = df['titles'] + ' ' + df['content']
     df['tokenized_text'] = df['combined_text'].apply(lambda text: word_tokenize(text.lower()))
-    df['lemmatized_tokens'] = df['tokenized_text'].apply(lambda tokens: [lemmatizer.lemmatize(token) for token in tokens])
-    df['processed_text'] = df['lemmatized_tokens'].apply(lambda tokens: ' '.join(tokens)) 
+    df['lemmatized_tokens'] = df['tokenized_text'].apply(
+        lambda tokens: [lemmatizer.lemmatize(token) for token in tokens])
+    df['processed_text'] = df['lemmatized_tokens'].apply(lambda tokens: ' '.join(tokens))
 
     end_time = time.time()
     duration = end_time - start_time
-    print(f'Time taken for preprocessing compute: {round((duration/60.0),2)} mins')
+    print(f'Time taken for preprocessing compute: {round((duration / 60.0), 2)} mins')
 
     return df
-
 
 
 def compute_tfidf(df):
@@ -50,27 +52,27 @@ def compute_tfidf(df):
     reduced_tfidf = pca.fit_transform(tfidf_matrix)
     tfidf_df = pd.DataFrame(reduced_tfidf, columns=['PCA1', 'PCA2'])
     tfidf_df['time_published'] = df['time_published']
-    
+
     end_time = time.time()  # Get the end time
     duration = end_time - start_time  # Calculate the duration
 
     print(f'Time taken for TFIDF: {duration} seconds')
 
-
     return tfidf_df
+
 
 def divide_into_chunks(text, tokenizer, max_length=500):
     tokenized_text = tokenizer.tokenize(text)
     chunks = []
 
     for i in range(0, len(tokenized_text), max_length):
-        chunk = tokenized_text[i:i+max_length]
+        chunk = tokenized_text[i:i + max_length]
         chunks.append(tokenizer.convert_tokens_to_string(chunk))
 
     return chunks
 
-def get_sentiment(text, cryptobert_url, hugging_face_token):
 
+def get_sentiment(text, cryptobert_url, hugging_face_token):
     headers = {"Authorization": f"Bearer {hugging_face_token}", "Content-Type": "application/json"}
     payload = {"inputs": text}
 
@@ -81,10 +83,11 @@ def get_sentiment(text, cryptobert_url, hugging_face_token):
         for item in response_json:
             if item['label'] in sentiment_scores.keys():
                 sentiment_scores[item['label']] = item['score']
-    else: 
+    else:
         print(f'Code: {response.status_code}, Error: {response.text}')
-    
+
     return sentiment_scores
+
 
 def update_dataframe_with_sentiment(df, cryptobert_url, hugging_face_token):
     start_time = time.time()
@@ -112,7 +115,7 @@ def update_dataframe_with_sentiment(df, cryptobert_url, hugging_face_token):
             chunk_scores_LABEL_0.append(sentiment_scores['LABEL_0'])
             chunk_scores_LABEL_1.append(sentiment_scores['LABEL_1'])
 
-            print(f"Processed {i+1}/{total_chunks} chunks for row {idx+1}.")
+            print(f"Processed {i + 1}/{total_chunks} chunks for row {idx + 1}.")
 
         scores_array_LABEL_0 = np.array(chunk_scores_LABEL_0)
         scores_array_LABEL_1 = np.array(chunk_scores_LABEL_1)
@@ -130,16 +133,18 @@ def update_dataframe_with_sentiment(df, cryptobert_url, hugging_face_token):
     end_time = time.time()
     duration = end_time - start_time
 
-    print(f'Time taken for sentiment compute: {round((duration/60.0),2)} mins')
+    print(f'Time taken for sentiment compute: {round((duration / 60.0), 2)} mins')
 
     return df
 
+
 def add_sentiment_and_tfidf_to_df(original_df, tfidf_data, cryptobert_url, hugging_face_token):
     original_df = update_dataframe_with_sentiment(original_df, cryptobert_url, hugging_face_token)
-    
+
     merged_df = tfidf_data.merge(original_df, on='time_published', how='inner')
 
     return merged_df
+
 
 def processing_df_to_db(df, db_name, feature_engineered_df):
     '''
@@ -151,11 +156,12 @@ def processing_df_to_db(df, db_name, feature_engineered_df):
     conn.close()
     print('Check SQLite! df to db func')
 
+
 def feature_eng_pipeline(db_name, processed_table_name, hf_ts_table_name, cryptobert_url, hugging_face_token):
     start_time = time.time()
     df = db_ingestion(db_name, processed_table_name)
     processed_text_df = preprocess_text(df)
-    
+
     tfidf_df = compute_tfidf(processed_text_df)
 
     merged_df = add_sentiment_and_tfidf_to_df(processed_text_df, tfidf_df, cryptobert_url, hugging_face_token)
@@ -167,5 +173,6 @@ def feature_eng_pipeline(db_name, processed_table_name, hf_ts_table_name, crypto
     print(f'Time taken for FE Pipeline: {duration} seconds')
 
     return 'Check SQLite? is it this one? fengpipe'
+
 
 feature_eng_pipeline(db_name, processed_table_name, table_name, cryptobert_url, hugging_face_token)

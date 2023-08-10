@@ -1,16 +1,19 @@
-import requests 
+import requests
 import pandas as pd
 import time
 from config import api_key, time_from, db_name, raw_table_name, cryptobert_url, hugging_face_token, trad_url
 import sqlite3
 from newspaper import Article
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import json
 
+
 def parse_float_date(date_str):
     print(date_str)
     return pd.to_datetime(date_str, format='%Y-%m-%d').strftime('%Y-%m-%d')
+
 
 def parse_date(date_str):
     date_str = str(date_str)
@@ -21,7 +24,24 @@ def parse_date(date_str):
 
     return pd.to_datetime(date_str, format='%Y%m%d').strftime('%Y-%m-%d')
 
+
+def get_latest_date_from_db(db_name, raw_table_name):
+    conn = sqlite3.connect(db_name)
+    query = f'SELECT MAX(time_published) as latest_date FROM {raw_table_name}'
+    latest_date = pd.read_sql_query(query, conn)['latest_date'].iloc[0]
+    conn.close()
+    return latest_date
+
+
+def format_date_for_api(date_str):
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+    formatted_date = date_obj.strftime('%Y%m%dT%H%M')
+    return formatted_date
+
+
 news_data = pd.DataFrame(columns=['titles', 'url', 'time_published'])
+
+
 def get_news_data(api_key, time_from):
     '''
     - Generates Global datafram
@@ -53,16 +73,17 @@ def get_news_data(api_key, time_from):
             titles.append(entry_title)
 
         temp_df = pd.DataFrame({'titles': titles, 'url': urls, 'time_published': time_published})
-        news_data = news_data.append(temp_df, ignore_index = True)
+        news_data = news_data.append(temp_df, ignore_index=True)
         next_start = news_data['time_published'].iloc[-1][:-6] + '0000'
         print(f'news data:{news_data}')
 
-        if len(temp_df)<10:
+        if len(temp_df) < 10:
             return news_data
         else:
             print('waiting 17 seconds')
             time.sleep(17)
             return get_news_data(api_key, next_start)
+
 
 def get_historical_btc_data(api_key):
     '''
@@ -76,15 +97,16 @@ def get_historical_btc_data(api_key):
         response = requests.get(btc_url)
         data = response.json()
         btc_prices = data['Time Series (Digital Currency Daily)']
-        
+
         for date, price in btc_prices.items():
             close_price = price['4a. close (USD)']
             btc_price_data = btc_price_data.append({'date': date, 'price': close_price}, ignore_index=True)
-    
+
     except requests.exceptions.RequestException as e:
         print(f'Request Error: {e}')
-    
+
     return btc_price_data
+
 
 def merge_data(btc_data, news_data):
     '''
@@ -100,6 +122,7 @@ def merge_data(btc_data, news_data):
     merged_data.drop('date', axis=1, inplace=True)
     return merged_data
 
+
 def extract_text(url):
     counter = 0
     try:
@@ -112,11 +135,13 @@ def extract_text(url):
         counter += 1
     print(f'{counter} URLS not Availble')
 
+
 def extract_content(df):
     with ThreadPoolExecutor(max_workers=10) as executor:
         df['content'] = list(executor.map(extract_text, df['url']))
     df.dropna(subset=['content'], inplace=True)
     return df
+
 
 def df_to_db(merged_data, db_name, raw_table_name):
     '''
@@ -129,15 +154,17 @@ def df_to_db(merged_data, db_name, raw_table_name):
     merged_data.to_sql(raw_table_name, conn, if_exists='append', index=False)
     conn.close()
 
+
 def ingestion_master(api_key, time_from, db_name, raw_table_name):
-    news_data = get_news_data(api_key, time_from)    
+    news_data = get_news_data(api_key, time_from)
     btc_data = get_historical_btc_data(api_key)
     merged_df = merge_data(btc_data, news_data)
     all_raw_data = extract_content(merged_df)
     df_to_db(all_raw_data, db_name, raw_table_name)
     return print('check SQLite!')
 
-#ingestion_master(api_key, time_from, db_name, raw_table_name)
+
+# ingestion_master(api_key, time_from, db_name, raw_table_name)
 
 def btc_fear_greed_idx(rapid_api):
     url = "https://fear-and-greed-index.p.rapidapi.com/v1/fgi"
@@ -150,9 +177,9 @@ def btc_fear_greed_idx(rapid_api):
 
     fgi_val = data['fgi']['now']['value']
     fgi_txt = data['fgi']['now']['valueText']
-    
+
     return fgi_val, fgi_txt
-#Summaries Should be done before ts data is set up. 
-#Model will preform better because they are coherent artilces
-#Can set max len of the summaries to be (num articles)d/avg len(articles)d where d is a day 
-#Then Concat the summaries
+# Summaries Should be done before ts data is set up.
+# Model will preform better because they are coherent artilces
+# Can set max len of the summaries to be (num articles)d/avg len(articles)d where d is a day
+# Then Concat the summaries
