@@ -13,9 +13,9 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, make_scorer
 
 
 def db_ingestion(database_name, table_name):
-    '''
+    """
     Get Data From DB to process for Model
-    '''
+    """
     conn = sqlite3.connect(database_name)
     print('opened sqlite connection')
 
@@ -101,11 +101,14 @@ def add_classifier_predictions(df, classifier_model_path):
                 'mean_neg_sentiment', 'max_neg_sentiment', 'min_neg_sentiment', 'std_neg_sentiment',
                 'mean_pos_sentiment', 'max_pos_sentiment', 'min_pos_sentiment', 'std_pos_sentiment']]
 
-    clf_predictions = clf_model.predict(X_clf)
+    new_data = X_clf.iloc[-1].values.reshape(1, -1)
+    clf_predictions = clf_model.predict(new_data)
 
-    df['clf_predictions'] = clf_predictions
+    # Create a copy of the last row and add the prediction
+    last_row = df.iloc[-1].copy()
+    last_row['clf_predictions'] = clf_predictions[0]
 
-    return df
+    return last_row
 
 
 def perform_reg_grid_search(df, classifier_model_path):
