@@ -1,9 +1,5 @@
-import matplotlib.pyplot as plt
-import pandas as pd
 import sqlite3
-from config import db_name, table_name
-import streamlit as st
-import matplotlib.dates as mdates
+from other.config import db_name, table_name
 import matplotlib.pyplot as plt
 import pandas as pd
 

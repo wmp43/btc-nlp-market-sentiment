@@ -1,6 +1,5 @@
 import sqlite3
 import pandas as pd
-from config import db_name, raw_table_name, processed_table_name
 
 
 def db_ingestion(db_name, raw_table_name):
@@ -69,12 +68,3 @@ def processing_df_to_db(df, db_name, hf_ts_table_name):
     print('Check SQLite!')
 
 
-def process_data_and_save_to_db(db_name, raw_table_name, processed_table_name):
-    df = db_ingestion(db_name, raw_table_name)
-    df = join_data_one_day_per_row(df)
-    df = lagging_features(df)
-
-    processing_df_to_db(df, db_name, processed_table_name)
-
-
-process_data_and_save_to_db(db_name, raw_table_name, processed_table_name)

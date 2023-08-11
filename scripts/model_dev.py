@@ -1,8 +1,8 @@
-from config import db_name, table_name, clf_path
+from other.config import db_name, table_name, clf_path
 import sqlite3
 import xgboost as xgb
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
-from sklearn.metrics import accuracy_score, classification_report, make_scorer
+from sklearn.metrics import accuracy_score, classification_report
 from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import LabelEncoder
 import joblib
@@ -79,7 +79,7 @@ def perform_clf_grid_search(df):
     print("Best accuracy on validation set: ", grid_search.best_score_)
 
     # Save the best model as a pickle file
-    joblib.dump(grid_search.best_estimator_, 'xgb_clf_1.0.pkl')
+    joblib.dump(grid_search.best_estimator_, '../models/xgb_clf_1.0.pkl')
 
     y_pred = grid_search.predict(X_val)
     print("Model Accuracy: ", accuracy_score(y_val, y_pred))
@@ -164,7 +164,7 @@ def perform_reg_grid_search(df, classifier_model_path):
           grid_search.cv_results_['mean_test_Directional Accuracy'][grid_search.best_index_])
 
     # Save the best model as a pickle file
-    joblib.dump(grid_search.best_estimator_, 'xgb_reg_1.0.pkl')
+    joblib.dump(grid_search.best_estimator_, '../models/xgb_reg_1.0.pkl')
 
     return grid_search.best_params_, -grid_search.best_score_, -grid_search.cv_results_['mean_test_MAPE'][
         grid_search.best_index_]
@@ -245,7 +245,7 @@ def reg_dev_master(clf_path, database_name, table_name):
                                             'future_returns', 'time_published', 'index', 'titles', 'content']).iloc[xssplit_idx:]
     y_val = df_with_clf_preds['future_returns'].iloc[split_idx:]
 
-    reg_model = joblib.load('xgb_reg_1.0.pkl')
+    reg_model = joblib.load('../models/xgb_reg_1.0.pkl')
 
     rmse, mape, mae, directional_accuracy = evaluate_model(reg_model, X_val, y_val)
 

@@ -1,5 +1,4 @@
 import sqlite3
-from config import processed_table_name, db_name, table_name, cryptobert_url, hugging_face_token
 import pandas as pd
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
@@ -146,33 +145,12 @@ def add_sentiment_and_tfidf_to_df(original_df, tfidf_data, cryptobert_url, huggi
     return merged_df
 
 
-def processing_df_to_db(df, db_name, feature_engineered_df):
-    '''
+def processing_df_to_db(df, database_name, dataframe):
+    """
     Send Data to SQLite db under processed_table_name
-    '''
+    """
     df = df.drop(['lemmatized_tokens', 'processed_text', 'combined_text', 'tokenized_text'], axis=1)
-    conn = sqlite3.connect(db_name)
-    df.to_sql(feature_engineered_df, conn, if_exists='append', index=False)
+    conn = sqlite3.connect(database_name)
+    df.to_sql(dataframe, conn, if_exists='append', index=False)
     conn.close()
     print('Check SQLite! df to db func')
-
-
-def feature_eng_pipeline(db_name, processed_table_name, hf_ts_table_name, cryptobert_url, hugging_face_token):
-    start_time = time.time()
-    df = db_ingestion(db_name, processed_table_name)
-    processed_text_df = preprocess_text(df)
-
-    tfidf_df = compute_tfidf(processed_text_df)
-
-    merged_df = add_sentiment_and_tfidf_to_df(processed_text_df, tfidf_df, cryptobert_url, hugging_face_token)
-    processing_df_to_db(merged_df, db_name, hf_ts_table_name)
-
-    end_time = time.time()
-    duration = end_time - start_time
-
-    print(f'Time taken for FE Pipeline: {duration} seconds')
-
-    return 'Check SQLite? is it this one? fengpipe'
-
-
-feature_eng_pipeline(db_name, processed_table_name, table_name, cryptobert_url, hugging_face_token)

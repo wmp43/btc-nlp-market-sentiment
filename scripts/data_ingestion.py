@@ -1,13 +1,11 @@
 import requests
 import pandas as pd
 import time
-from config import api_key, time_from, db_name, raw_table_name, cryptobert_url, hugging_face_token, trad_url
 import sqlite3
 from newspaper import Article
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
-import json
 
 
 def parse_float_date(date_str):
@@ -43,14 +41,14 @@ news_data = pd.DataFrame(columns=['titles', 'url', 'time_published'])
 
 
 def get_news_data(api_key, time_from):
-    '''
-    - Generates Global datafram
+    """
+    - Generates Global dataframe
     - Extracts Relevant info: URL, Title, Date/Time
     - Adds new Info to Dataframe
     - Finds last date in that dataframe
-    - Updates API call to only inlcude after that date
+    - Updates API call to only include after that date
     - Returns final dataframe with about 3600 rows as of June 2nd 2023
-    '''
+    """
     global news_data
     url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=COIN,CRYPTO:BTC&time_from={time_from}&sort=earliest&topics=blockchain&limit=1000&apikey={api_key}'
     r = requests.get(url)
@@ -86,11 +84,11 @@ def get_news_data(api_key, time_from):
 
 
 def get_historical_btc_data(api_key):
-    '''
+    """
     API Calls for historical BTC DATA
     Adds to dataframe
     Seems like this API is down or has changed
-    '''
+    """
     btc_url = f'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey={api_key}&outputsize=full'
     btc_price_data = pd.DataFrame(columns=['date', 'price'])
     try:
@@ -108,16 +106,16 @@ def get_historical_btc_data(api_key):
     return btc_price_data
 
 
-def merge_data(btc_data, news_data):
-    '''
-    parses date for join on date. 
-    '''
+def merge_data(btc_data, text_data):
+    """
+    parses date for join on date.
+    """
     print(type(btc_data['date'][0]))
     print(btc_data['date'][0])
-    news_data['time_published'] = news_data['time_published'].apply(parse_date)
+    text_data['time_published'] = text_data['time_published'].apply(parse_date)
     btc_data['date'] = btc_data['date'].apply(parse_float_date)
 
-    merged_data = pd.merge(news_data, btc_data, left_on='time_published', right_on='date', how='inner')
+    merged_data = pd.merge(text_data, btc_data, left_on='time_published', right_on='date', how='inner')
     merged_data.drop_duplicates(subset='titles', keep='first', inplace=True)
     merged_data.drop('date', axis=1, inplace=True)
     return merged_data
@@ -133,7 +131,7 @@ def extract_text(url):
     except:
         print(f'Not availble @{url}')
         counter += 1
-    print(f'{counter} URLS not Availble')
+    print(f'{counter} URLS not Available')
 
 
 def extract_content(df):
@@ -143,28 +141,26 @@ def extract_content(df):
     return df
 
 
-def df_to_db(merged_data, db_name, raw_table_name):
-    '''
+def df_to_db(merged_data, database_name, tablename):
+    """
     Send Data to SQLite db under raw-btc-price-news
-    '''
+    """
     merged_data.rename(columns={'Unnamed: 0': 'Index'}, inplace=True)
     merged_data['price'] = np.round(merged_data['price'].astype(float), 2)
 
-    conn = sqlite3.connect(db_name)
-    merged_data.to_sql(raw_table_name, conn, if_exists='append', index=False)
+    conn = sqlite3.connect(database_name)
+    merged_data.to_sql(tablename, conn, if_exists='append', index=False)
     conn.close()
 
 
-def ingestion_master(api_key, time_from, db_name, raw_table_name):
-    news_data = get_news_data(api_key, time_from)
-    btc_data = get_historical_btc_data(api_key)
-    merged_df = merge_data(btc_data, news_data)
-    all_raw_data = extract_content(merged_df)
-    df_to_db(all_raw_data, db_name, raw_table_name)
-    return print('check SQLite!')
+# def ingestion_master(api, timefrom, database_name, tablename):
+#     text_data = get_news_data(api, timefrom)
+#     btc_data = get_historical_btc_data(api)
+#     merged_df = merge_data(btc_data, text_data)
+#     all_raw_data = extract_content(merged_df)
+#     df_to_db(all_raw_data, database_name, tablename)
+#     return print('check SQLite!')
 
-
-# ingestion_master(api_key, time_from, db_name, raw_table_name)
 
 def btc_fear_greed_idx(rapid_api):
     url = "https://fear-and-greed-index.p.rapidapi.com/v1/fgi"

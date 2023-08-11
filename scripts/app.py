@@ -1,9 +1,8 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 import pandas as pd
 import sqlite3
-from config import table_name, db_name, rapid_api
-from data_ingestion import btc_fear_greed_idx
+from other.config import table_name, db_name, rapid_api
+from scripts.data_ingestion import btc_fear_greed_idx
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.dates as mdates
