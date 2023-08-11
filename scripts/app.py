@@ -1,18 +1,31 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from other.config import table_name, db_name, rapid_api
-from scripts.data_ingestion import btc_fear_greed_idx
+from config import db_name, rapid_api, table2, clf_path, reg_path
+from data_ingestion import btc_fear_greed_idx
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.dates as mdates
+from joblib import load
+from datetime import datetime, timedelta
+from model_dev import add_classifier_predictions
+
+
 # Import other required libraries
 
-def db_ingestion(db_name, table_name):
-    '''
+def predictions_master(clf_model_path, reg_model_path, database_name, table):
+    dataf = db_query(database_name, table)
+    clf_feature_space = add_classifier_predictions(dataf, clf_model_path)
+    reg_model = load(reg_model_path)
+    reg_predictions = reg_model.predict([clf_feature_space])
+    return reg_predictions[0]
+
+
+def db_query(databse_name, table_name):
+    """
     Get Data From DB to process for Model
-    '''
-    conn = sqlite3.connect(db_name)
+    """
+    conn = sqlite3.connect(databse_name)
     print('opened sqlite connection')
     query = f'SELECT * FROM {table_name}'
     df = pd.read_sql_query(query, conn)
@@ -20,16 +33,17 @@ def db_ingestion(db_name, table_name):
     print('closed sqlite connection')
     return df
 
+
 st.set_page_config(layout="wide")  # This should be the first Streamlit command
 
 st.title('BTC Market Sentiment Application')
 st.sidebar.header('Navigation')
-selection = st.sidebar.radio("Go to", ['About','Data Ingestion & Engineering', 'Feature Engineering', 'Data Visualization',  'Model Development', 'Predictions'])
+selection = st.sidebar.radio("Go to",
+                             ['About', 'Data Ingestion & Engineering', 'Feature Engineering', 'Data Visualization',
+                              'Model Development', 'Predictions'])
 
-#Data Ingestion & Engineering, Feature Engineering, Model Development
-data = db_ingestion(db_name, table_name)
-
-
+# Data Ingestion & Engineering, Feature Engineering, Model Development
+data = db_query(db_name, table2)
 
 if selection == 'Data Visualization':
     st.header("Data Visualization")
@@ -40,13 +54,12 @@ if selection == 'Data Visualization':
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(data['time_published'], data['future_returns'].rolling(10).mean())
     avg_rolling_mean = data['future_returns'].rolling(10).mean().mean()
-    ax.axhline(y=avg_rolling_mean, color='r', linestyle='--', label=f'Average Returns {round(avg_rolling_mean,4)}')
+    ax.axhline(y=avg_rolling_mean, color='r', linestyle='--', label=f'Average Returns {round(avg_rolling_mean, 4)}')
     plt.xlabel('Date')
     plt.ylabel('Returns')
     plt.legend()
     plt.title('10 Rolling Mean of Daily Returns')
     st.pyplot(fig)
-
 
     fig, ax1 = plt.subplots(figsize=(12, 8))
 
@@ -59,7 +72,8 @@ if selection == 'Data Visualization':
 
     # Creating a second axis to plot sentiment
     ax2 = ax1.twinx()
-    ax2.plot(data['time_published'],(data['mean_pos_sentiment'] - data['mean_neg_sentiment']).rolling(30).mean(), color='r', label='Sentiment Change')
+    ax2.plot(data['time_published'], (data['mean_pos_sentiment'] - data['mean_neg_sentiment']).rolling(30).mean(),
+             color='r', label='Sentiment Change')
     ax2.set_ylabel('Sentiment Change', color='r')
     ax2.tick_params(axis='y', labelcolor='r')
 
@@ -83,8 +97,8 @@ if selection == 'Data Visualization':
 
     # Determine the color based on the value
     if fgi_val >= 70:
-        color = 'red' 
-    elif fgi_val > 40 and fgi_val < 70:
+        color = 'red'
+    elif 40 < fgi_val < 70:
         color = 'yellow'
     else:
         color = 'green'
@@ -93,6 +107,16 @@ if selection == 'Data Visualization':
     st.markdown(f'<h1 style="color:{color};">{fgi_val}</h1>', unsafe_allow_html=True)
     # Display the text description below it
     st.markdown(f'<h3 style="color:{color};">{fgi_txt}</h3>', unsafe_allow_html=True)
+
+
+
+elif selection == 'Predictions':
+    st.header("Predictions")
+    pred = predictions_master(clf_path, reg_path, db_name, table2)
+    tomorrow = datetime.now() + timedelta(days=1)
+    date_str = tomorrow.strftime("%Y-%m-%d")
+    print(f'BTC returns for {date_str} will be {pred}')
+
 
 
 elif selection == 'Data Ingestion & Engineering':
@@ -261,7 +285,7 @@ These collective functions lay the foundation for the entire data processing pip
         '''
     """
 
-    st.markdown("Intial API call for Articles, URLs, and BTC Price. Further merges the data sources")
+    st.markdown("Initial API call for Articles, URLs, and BTC Price. Further merges the data sources")
     st.code(code_example, language='python')
     st.markdown("Extracting Text from URLS and sending extracted text to SQLite DB")
     st.code(code_example1, language='python')
@@ -458,7 +482,6 @@ def lagging_features(df):
     """)
     st.code(code_chunk1, language='python')
 
-
     st.header("Feature Space Visualizations")
     st.markdown("""
     Below are some visualizations of the feature space.
@@ -468,8 +491,8 @@ def lagging_features(df):
     df = data
 
     selected_columns = ['PCA1', 'PCA2', 'price', 'day_of_week', 'returns', '3d_rolling_volatility',
-                    '7d_rolling_volatility', 'future_returns',
-                    'mean_neg_sentiment', 'mean_pos_sentiment']
+                        '7d_rolling_volatility', 'future_returns',
+                        'mean_neg_sentiment', 'mean_pos_sentiment']
 
     corr_matrix = data[selected_columns].corr()
 
@@ -479,7 +502,7 @@ def lagging_features(df):
     st.pyplot(plt)
 
 elif selection == 'Model Development':
-    st.header("Classifier Model Deveopment")
+    st.header("Classifier Model Development")
     st.markdown("""
 These functions cover the classification modeling part of the pipeline, focusing on predicting future returns as discrete classes.
 - Labeling returns based on the calculated future returns, and encoding them into numerical classes.
@@ -539,7 +562,7 @@ def add_classifier_predictions(df, classifier_model_path):
 '''
     st.code(code_chunk1, language='python')
 
-    st.header("Regressor Model Deveopment")
+    st.header("Regressor Model Development")
     st.markdown("""
 These functions provide the necessary steps for regression model development. 
 - Adding classifier predictions to the data as features.
@@ -549,8 +572,7 @@ These functions provide the necessary steps for regression model development.
 - Evaluating the best model against the validation set and saving the trained model.
 - Implementing a naïve approach for comparison and evaluating it using RMSE and MAPE.
 - Evaluating the model's performance with RMSE, MAPE, MAE, and Directional Accuracy, and comparing it with the naïve approach.""")
-    
-    
+
     code_chunk0 = '''
 import xgboost as xgb
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
@@ -622,8 +644,6 @@ def evaluate_model(model, X_val, y_val):
     '''
     st.code(code_chunk0, language='python')
 
-elif selection == 'Predictions':
-    st.header("Predictions")
 
 
 elif selection == 'About':

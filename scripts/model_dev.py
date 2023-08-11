@@ -1,4 +1,4 @@
-from other.config import db_name, table_name, clf_path
+from scripts.config import db_name, table_name, clf_path
 import sqlite3
 import xgboost as xgb
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split

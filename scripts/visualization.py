@@ -1,5 +1,5 @@
 import sqlite3
-from other.config import db_name, table_name
+from scripts.config import db_name, table_name
 import matplotlib.pyplot as plt
 import pandas as pd
 

@@ -1,7 +1,7 @@
 text-btc-db
 text-btc-db.sqbpro
 hf_endpoints
-config.py
+../scripts/config.py
 model_dev.ipynb
 testing.py
 /Users/owner/myles-personal-env/Projects/text-btc-app/text-btc-db

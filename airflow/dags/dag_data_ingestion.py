@@ -2,9 +2,7 @@ from datetime import timedelta, datetime
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from scripts.data_ingestion import (get_news_data,
-                                    get_historical_btc_data, merge_data, extract_content, df_to_db, get_latest_date_from_db,
-                                    format_date_for_api)
+
 from config import api_key, db_name, table0
 
 
@@ -19,19 +17,19 @@ def ingestion_master(api, database_name, tablename, **kwargs):
     return print(f'Ingestion Master Executed check {tablename} in SQLite')
 
 
-dag = DAG(
+with DAG(
     'data_ingestion_dag',
     description='DAG for data ingestion',
     schedule_interval='0 0 * * *',
     start_date=datetime(2023, 8, 9),
     catchup=False,
     default_args={'retries': 1, 'retry_delay': timedelta(minutes=20)},
-)
+) as data_ingestion_dag:
 
-ingestion_task = PythonOperator(
-    task_id='ingestion_task',
-    python_callable=ingestion_master,
-    op_args=[api_key, db_name, table0],
-    dag=dag,
-)
+    ingestion_task = PythonOperator(
+        task_id='ingestion_task',
+        python_callable=ingestion_master,
+        op_args=[api_key, db_name, table0],
+        dag=dag,
+    )
 
