@@ -19,11 +19,10 @@ def predictions_master(clf_model_path, reg_model_path, database_name, table):
     reg_model = load(reg_model_path)
     fs = clf_feature_space[['PCA1', 'PCA2', 'price', 'day_of_week', 'lagged_price', 'returns',
                                      'mean_neg_sentiment', 'max_neg_sentiment', 'min_neg_sentiment',
-                                     'std_neg_sentiment',
+                                     'std_neg_sentiment', '3d_rolling_volatility', '7d_rolling_volatility',
                                      'mean_pos_sentiment', 'max_pos_sentiment', 'min_pos_sentiment',
                                      'std_pos_sentiment', 'clf_predictions']]
-    print(clf_feature_space)
-    reg_predictions = reg_model.predict([fs])
+    reg_predictions = reg_model.predict(fs)
     return reg_predictions[0]
 
 
@@ -121,7 +120,7 @@ elif selection == 'Predictions':
     pred = predictions_master(clf_path, reg_path, db_path, table2)
     tomorrow = datetime.now() + timedelta(days=1)
     date_str = tomorrow.strftime("%Y-%m-%d")
-    print(f'BTC returns for {date_str} will be {pred}')
+    st.header(f'BTC returns for {date_str} will be {round(pred*100,3)}%')
 
 
 

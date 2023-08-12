@@ -1,4 +1,4 @@
-from config import db_name, table2, clf_path
+from config import db_path, table2, clf_path
 import sqlite3
 import xgboost as xgb
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
@@ -94,6 +94,23 @@ def clf_dev_master(database_name, table_name):
 
 # clf_dev_master(db_name, table_name)
 
+# def add_classifier_predictions(df, classifier_model_path):
+#     clf_model = load(classifier_model_path)
+#
+#     X_clf = df[['PCA1', 'PCA2', 'price', 'day_of_week', 'lagged_price', 'returns',
+#                 'mean_neg_sentiment', 'max_neg_sentiment', 'min_neg_sentiment', 'std_neg_sentiment',
+#                 'mean_pos_sentiment', 'max_pos_sentiment', 'min_pos_sentiment', 'std_pos_sentiment']]
+#
+#     new_data = X_clf.iloc[-1].values.reshape(1, -1)
+#     clf_predictions = clf_model.predict(new_data)
+#
+#     # Create a copy of the last row and add the prediction
+#     last_row = df.iloc[-1].copy()
+#     last_row['clf_predictions'] = clf_predictions[0]
+#
+#     return last_row
+
+
 def add_classifier_predictions(df, classifier_model_path):
     clf_model = load(classifier_model_path)
 
@@ -101,14 +118,11 @@ def add_classifier_predictions(df, classifier_model_path):
                 'mean_neg_sentiment', 'max_neg_sentiment', 'min_neg_sentiment', 'std_neg_sentiment',
                 'mean_pos_sentiment', 'max_pos_sentiment', 'min_pos_sentiment', 'std_pos_sentiment']]
 
-    new_data = X_clf.iloc[-1].values.reshape(1, -1)
-    clf_predictions = clf_model.predict(new_data)
+    clf_predictions = clf_model.predict(X_clf)
 
-    # Create a copy of the last row and add the prediction
-    last_row = df.iloc[-1].copy()
-    last_row['clf_predictions'] = clf_predictions[0]
+    df['clf_predictions'] = clf_predictions
 
-    return last_row
+    return df
 
 
 def perform_reg_grid_search(df, classifier_model_path):
@@ -120,6 +134,7 @@ def perform_reg_grid_search(df, classifier_model_path):
                        'future_returns', 'time_published', 'index', 'titles', 'content']
 
     features = df.drop(columns=columns_to_drop)
+    print(features.columns)
     target = df['future_returns']
 
     n = len(df)
@@ -254,4 +269,4 @@ def reg_dev_master(clf_path, database_name, table_name):
     return reg_model, rmse, mape, mae, da
 
 
-#best_model, best_rmse, best_mape, best_mae, best_directional_accuracy = reg_dev_master(clf_path, db_name, table_name)
+#best_model, best_rmse, best_mape, best_mae, best_directional_accuracy = reg_dev_master(clf_path, db_path, table2)
