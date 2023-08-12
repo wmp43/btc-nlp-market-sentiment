@@ -1,4 +1,4 @@
-from scripts.config import db_name, table_name, clf_path
+from config import db_name, table2, clf_path
 import sqlite3
 import xgboost as xgb
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
@@ -242,14 +242,16 @@ def reg_dev_master(clf_path, database_name, table_name):
                                             'min_sentiment_score_LABEL_0', 'std_sentiment_score_LABEL_0',
                                             'mean_sentiment_score_LABEL_1', 'max_sentiment_score_LABEL_1',
                                             'min_sentiment_score_LABEL_1', 'std_sentiment_score_LABEL_1',
-                                            'future_returns', 'time_published', 'index', 'titles', 'content']).iloc[xssplit_idx:]
+                                            'future_returns', 'time_published', 'index', 'titles',
+                                            'content']).iloc[split_idx:]
+
     y_val = df_with_clf_preds['future_returns'].iloc[split_idx:]
 
     reg_model = joblib.load('../models/xgb_reg_1.0.pkl')
 
-    rmse, mape, mae, directional_accuracy = evaluate_model(reg_model, X_val, y_val)
+    rmse, mape, mae, da = evaluate_model(reg_model, X_val, y_val)
 
-    return best_model, rmse, mape, mae, directional_accuracy
+    return reg_model, rmse, mape, mae, da
 
 
-best_model, best_rmse, best_mape, best_mae, best_directional_accuracy = reg_dev_master(clf_path, db_name, table_name)
+#best_model, best_rmse, best_mape, best_mae, best_directional_accuracy = reg_dev_master(clf_path, db_name, table_name)

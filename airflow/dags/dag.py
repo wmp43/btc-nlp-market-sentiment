@@ -12,7 +12,7 @@ from scripts.feature_engineering import (db_ingestion, preprocess_text,
                                          compute_tfidf, add_sentiment_and_tfidf_to_df,
                                          processing_df_to_db)
 
-from config import db_name, table0, table1, table2, api_key, cryptobert_url, hugging_face_token
+from scripts.config import db_name, table0, table1, table2, api_key, cryptobert_url, hugging_face_token
 
 
 # Data Ingestion

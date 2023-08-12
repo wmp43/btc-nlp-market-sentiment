@@ -1,4 +1,4 @@
-text-btc-db
+../scripts/text-btc-db
 text-btc-db.sqbpro
 hf_endpoints
 ../scripts/config.py

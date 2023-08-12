@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from config import db_name, rapid_api, table2, clf_path, reg_path
+from config import db_path, rapid_api, table2, clf_path, reg_path
 from data_ingestion import btc_fear_greed_idx
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,15 +17,21 @@ def predictions_master(clf_model_path, reg_model_path, database_name, table):
     dataf = db_query(database_name, table)
     clf_feature_space = add_classifier_predictions(dataf, clf_model_path)
     reg_model = load(reg_model_path)
-    reg_predictions = reg_model.predict([clf_feature_space])
+    fs = clf_feature_space[['PCA1', 'PCA2', 'price', 'day_of_week', 'lagged_price', 'returns',
+                                     'mean_neg_sentiment', 'max_neg_sentiment', 'min_neg_sentiment',
+                                     'std_neg_sentiment',
+                                     'mean_pos_sentiment', 'max_pos_sentiment', 'min_pos_sentiment',
+                                     'std_pos_sentiment', 'clf_predictions']]
+    print(clf_feature_space)
+    reg_predictions = reg_model.predict([fs])
     return reg_predictions[0]
 
 
-def db_query(databse_name, table_name):
+def db_query(database_path, table_name):
     """
     Get Data From DB to process for Model
     """
-    conn = sqlite3.connect(databse_name)
+    conn = sqlite3.connect(database_path)
     print('opened sqlite connection')
     query = f'SELECT * FROM {table_name}'
     df = pd.read_sql_query(query, conn)
@@ -43,7 +49,7 @@ selection = st.sidebar.radio("Go to",
                               'Model Development', 'Predictions'])
 
 # Data Ingestion & Engineering, Feature Engineering, Model Development
-data = db_query(db_name, table2)
+data = db_query(db_path, table2)
 
 if selection == 'Data Visualization':
     st.header("Data Visualization")
@@ -112,7 +118,7 @@ if selection == 'Data Visualization':
 
 elif selection == 'Predictions':
     st.header("Predictions")
-    pred = predictions_master(clf_path, reg_path, db_name, table2)
+    pred = predictions_master(clf_path, reg_path, db_path, table2)
     tomorrow = datetime.now() + timedelta(days=1)
     date_str = tomorrow.strftime("%Y-%m-%d")
     print(f'BTC returns for {date_str} will be {pred}')
@@ -648,42 +654,54 @@ def evaluate_model(model, X_val, y_val):
 
 elif selection == 'About':
     st.header("About The Project")
-    st.markdown("""
-    Goal: Create a market sentiment application using text data from publicationsto understand the markets sentiment toward BTC and how this may relate with returns or price  over various time frames.
-    
-    Data Ingestion and Engineering: Sourced articles from various websites via Alpha Vantage API, web scraped URLs, and orchestrated using Apache Airflow. I decided on SQLite because it is lightweighteasy to set up and we don't really have that much data. 
-    
-    Feature Engineering: Used webscraped text to develop two main methods of feature engineering from text.
-    The first was a sentiment analysis score from a hugging face model. Used batch processing and value aggregation 
-    to develop mean,min,max,std positive and negative sentiment scores creating 8 new features. 
-    The second methodwas a TF-IDF matrix and dimensionality reduction (PCA). The HF model caputred the emotional nature of the text while
-    the TF-IDF and PCA captured key terms. Future Plans: Use another HF model to create a wider feature space.
-    
-    Deployment and Prediction: Developed a stack XGBoost system. Intial clf was a multiclass output for 
-    next day returns: 0 -- between mean±std, 1 -- >mean+std, 2 -- <mean-std.  the first model (multiclass clf) was about between 50 and 51% accurate (random guess) 
-    Fed predictions and feature space of this 
-    clf model to the XGBoost regressor. Evaluated on MAE, RMSE, MAPE, and directional accuracy on a 
-    held out set in order to avoid data leakage and to properly evaluate the model.
-    while, we were able to get around 60% accurate directionally. Future Plans: Creation of 
-    a custom objective function to incorporate directional accuracy and magnitude
+    st.markdown("Goal: Create a market sentiment application using text data from publications to "
+                "understand the markets sentiment toward BTC and how this may relate with returns or "
+                "price  over various time frames.")
+    st.header("Data Ingestion and Engineering")
+    st.markdown("I Sourced article URLs from an API and web scraped these URLs for their main content and titles."
+                "After some data manipulation, I was able to store the content of these articles in an SQLite db."
+                "I decided on SQLite because it is light weight and realistically there isn't enough data to warrant a "
+                "heavier system"
+                " In order to keep the database up to date and predictions available for each subsequent day, "
+                "I decided "
+                "to use Airflow for orchestration. "
+                "You can see more of the details on the Data Ingestion and Engineering page which shows specific "
+                "functions and the documentation for each\n"
+                "\nFuture Plans: A wider scope of text data.\n"
+                "\nTechnologies: Pandas, SQLite3, newspaper3k, Numpy, Apache Airflow")
 
-    Display: Streamlit helped to present everything in a clean and user-friendly way,
-    with different tabs for easy navigation. 
-    Future Plans: Some design improvements are on the way.
-
-    Impact and Results: Aimed at Bitcoin investors and market enthusiasts, 
-    the application delivers real-time market sentiment insights updated at 5pm everyday. 
-    Future Plans: 
-    Developing trading system based on these predictions. Long way out.. but I need money so maybe not.
-
-    My Role: This was a solo project, a hands-on opportunity to explore and create something 
-    intriguing from scratch.
-        """)
+    st.header("Feature Engineering")
+    st.markdown("Using the web scraped text, I was able to develop some main features for the model. The first method"
+                "was to use a TF-IDF Matrix. Given the huge dimensionality that "
+                "comes with TF-IDF (Term Frequency-Inverse Document Frequency), "
+                "I decided to reduce"
+                "the dimensionality using PCA (Principal Component Analysis). The second method was to use "
+                "a pre-trained Hugging Face Model for sentiment analysis. This model was specifically tuned for crypto"
+                " news (https://huggingface.co/kk08/CryptoBERT). This model outputted sentiment scores "
+                "(positive and negative) from"
+                " each 500 token chunk. I then developed summary statistics of the sentiment scores (mean, min, max, "
+                "std)"
+                "of the scores for both positive and negative labels. This created 8 new features for the model."
+                " I also created some lagging features like volatility measures, lagging price, and set the target"
+                "feature for both the classifier and regressor.\n"
+                "\nFuture Plans: Another hugging face model for a wider feature space\n"
+                "\nTechnologies: Pandas, Numpy, NLTK, Sklearn, Transformers"
+                "")
+    st.header("Model Development")
+    st.markdown("Using the feature space of lagging features and NLP features (sentiment scores, tf-idf), I decided to"
+                " use a stack ensemble approach to predicting next day returns. The first model was a XGB classifier"
+                "with the targets being neutral, negative, and positive. The predictions from this model were then used"
+                "as a feature for the regressor model. Some techniques used were a time-series grid search for features"
+                " The model was tested on a validation set that was not used at all during the train/testing of the "
+                "model. This was done to accurately assess generalization power on unseen data. A naive approach"
+                " was also implemented to ensure the efficacy of developing a model in the first place.\n"
+                "\nFuture Plans: Create a custom objective function.\n"
+                "\nTechnologies: Pandas, Numpy, Sklearn, Imbalanced-Learn")
 
     st.header("About The Author")
     st.markdown("""
         I'm Myles, a recent Cornell Information Science Grad. 
         Interested in end to end data-driven systems. 
         Looking for full time roles related to Data Engineering/Science/Analytics/Product Management.
-        Please Reach out to wmp43@cornell.edu for questions/suggestions/opportunites
+        Please Reach out to wmp43@cornell.edu for questions/suggestions/opportunities
     """)
