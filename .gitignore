@@ -4,9 +4,9 @@ hf_endpoints
 ../scripts/config.py
 model_dev.ipynb
 testing.py
-text-btc-app/text-btc-db
-text-btc-app/text-btc-db-journal
-text-btc-app/text-btc-db.sqbpro
-text-btc-app/scripts/text-btc-db
-text-btc-app/db-backup/text-btc-db
+text-btc-db
+text-btc-db-journal
+text-btc-db.sqbpro
+scripts/text-btc-db
+db-backup/text-btc-db
 
