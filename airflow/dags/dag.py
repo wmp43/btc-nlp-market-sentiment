@@ -22,6 +22,7 @@ from scripts.feature_engineering import (db_ingestion, preprocess_text,
 
 from scripts.config import db_path, table0, table1, table2, api_key, cryptobert_url, hugging_face_token
 
+#https://airflow.apache.org/docs/apache-airflow/2.6.1/tutorial/pipeline.html
 
 # Data Ingestion
 def data_ingestion_master(api, database_name, tablename, **kwargs):
