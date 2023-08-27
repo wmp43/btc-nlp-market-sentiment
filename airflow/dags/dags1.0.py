@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from airflow import DAG
 
 from airflow.operators.python import PythonOperator
+from airflow.decorators import dag, task
 
 from scripts.data_processing import (db_ingestion, join_data_one_day_per_row,
                                      lagging_features, processing_df_to_db)
@@ -26,6 +27,9 @@ from scripts.config import db_path, table0, table1, table2, api_key, cryptobert_
 # https://airflow.apache.org/docs/apache-airflow/2.6.1/tutorial/pipeline.html
 
 # Data Ingestion
+
+
+@task
 def data_ingestion_master(api, database_name, tablename, **kwargs):
     latest_date = get_latest_date_from_db(database_name, tablename)
     formatted_latest_date = format_date_for_api(latest_date)
@@ -37,6 +41,7 @@ def data_ingestion_master(api, database_name, tablename, **kwargs):
     return print(f'Ingestion Master Executed check {tablename} in SQLite')
 
 
+@task
 def data_processing_master(database_name, raw_table, processed_table, **kwargs):
     df = db_ingestion(database_name, raw_table)
     df = join_data_one_day_per_row(df)
@@ -45,6 +50,7 @@ def data_processing_master(database_name, raw_table, processed_table, **kwargs):
     return print(f'Data Processing Master Executed check {processed_table} in SQLite')
 
 
+@task
 def feature_eng_master(database_name, table_name1, table_name2, hf_endpoint, hf_token, **kwargs):
     df = db_ingestion(database_name, table_name1)
     processed_text_df = preprocess_text(df)
@@ -54,49 +60,26 @@ def feature_eng_master(database_name, table_name1, table_name2, hf_endpoint, hf_
     return print('Feature Engineering Master Executed! Check SQLite for the updates.')
 
 
-# Data Ingestion Dag
-with DAG(
-        'data_pipeline_dag',
-        default_args={
-            'retries': 2,
-            'retry_delay': timedelta(minutes=20)},
-        description='DAG for data pipeline',
-        schedule=timedelta(days=1),
-        start_date=datetime(2023, 8, 13, 23, 55),
-        catchup=False,
-        dagrun_timeout=timedelta(minutes=60)
-) as data_pipe:
-    data_ingestion_task = PythonOperator(
-        task_id='ingestion_task',
-        python_callable=data_ingestion_master,
-        op_args=[api_key, db_path, table0],
-    )
+@dag(
+    dag_id='btc_text_data_pipeline',
+    default_args={
+             'retries': 2,
+             'retry_delay': timedelta(minutes=7)},
+    schedule=timedelta(days=1),  # Or your preferred schedule
+    start_date=datetime(2023, 8, 27, 23, 55),
+    catchup=False,
+    dagrun_timeout=timedelta(minutes=60)
+)
+def dag_func():
+    data_ingestion = data_ingestion_master(api_key, db_path, table0)
+    data_processing = data_processing_master(db_path, table0, table1)
+    feature_eng = feature_eng_master(db_path, table1, table2, cryptobert_url, hugging_face_token)
 
-    data_ingestion_task.doc_md = dedent(
-        """Data Ingestion. See airflow/dags/dags.py data_ingestion_master for details on the task""")
+    data_ingestion >> data_processing >> feature_eng
 
-    data_processing_task = PythonOperator(
-        task_id='data_processing_task',
-        python_callable=data_processing_master,
-        op_args=[db_path, table0, table1],
-    )
-
-    data_processing_task.doc_md = dedent(
-        """Data Processing. See airflow/dags/dags.py data_processing_master for details on the task""")
-
-    feature_engineering_task = PythonOperator(
-        task_id='feature_engineering_task',
-        python_callable=feature_eng_master,
-        op_args=[db_path, table1, table2, cryptobert_url, hugging_face_token],
-    )
-
-    feature_engineering_task.doc_md = dedent(
-        """Feature Engineering. See airflow/dags/dags.py feature_engineering_master for details on the task""")
-
-# data_ingestion_task.set_downstream(data_processing_task)
-# data_processing_task.set_downstream(feature_engineering_task)
+# Initialize the DAG
+dag_instance = dag_func()
 
 
-data_ingestion_task >> data_processing_task >> feature_engineering_task
 
-data_pipe
+
