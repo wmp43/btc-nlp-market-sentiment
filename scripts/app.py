@@ -662,7 +662,7 @@ elif selection == 'About':
     st.markdown("I Sourced article URLs from an API and web scraped these URLs for their main content and titles."
                 "After some data manipulation, I was able to store the content of these articles in an SQLite db."
                 "I decided on SQLite because it is light weight and realistically there isn't enough data to warrant a "
-                "heavier system"
+                "heavier system. Additionally, it would also make a ton of sense to use a vector database here."
                 " In order to keep the database up to date and predictions available for each subsequent day, "
                 "I decided "
                 "to use Airflow for orchestration. "
