@@ -654,8 +654,10 @@ def evaluate_model(model, X_val, y_val):
 elif selection == 'About':
     st.header("About The Project")
     st.markdown("Goal: Create a market sentiment application using text data from publications to "
-                "understand the markets sentiment toward BTC and how this may relate with returns or "
-                "price  over various time frames.")
+                "understand the markets sentiment toward BTC and how this may relate with returns"
+                " - Update: According to the Terms and Services of a vast majority of the publications that text was "
+                "being scraped, it was against terms of service to continue scraping text data from these publications. "
+                "Thus, I have decided to stop the system from continuing to scrape text data.")
     st.header("Data Ingestion and Engineering")
     st.markdown("I Sourced article URLs from an API and web scraped these URLs for their main content and titles."
                 "After some data manipulation, I was able to store the content of these articles in an SQLite db."
