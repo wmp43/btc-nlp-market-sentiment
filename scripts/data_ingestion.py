@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 import time
 import sqlite3
-from newspaper import Article
+from newspaper3k import Article
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
