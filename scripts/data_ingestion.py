@@ -2,7 +2,6 @@ import requests
 import pandas as pd
 import time
 import sqlite3
-from newspaper3k import Article
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
@@ -121,17 +120,21 @@ def merge_data(btc_data, text_data):
     return merged_data
 
 
-def extract_text(url):
-    counter = 0
-    try:
-        article = Article(url)
-        article.download()
-        article.parse()
-        return article.text
-    except:
-        print(f'Not availble @{url}')
-        counter += 1
-    print(f'{counter} URLS not Available')
+# def extract_text(url):
+#     counter = 0
+#     try:
+#         article = Article(url)
+#         article.download()
+#         article.parse()
+#         return article.text
+#     except:
+#         print(f'Not availble @{url}')
+#         counter += 1
+#     print(f'{counter} URLS not Available')
+
+
+def extract_text(text):
+    return text
 
 
 def extract_content(df):
