@@ -136,7 +136,7 @@ marshmallow==3.19.0
 marshmallow-enum==1.5.1
 marshmallow-oneofschema==3.0.1
 marshmallow-sqlalchemy==0.26.1
-matplotlib==3.5.3
+matplotlib.pyplot==3.5.3
 matplotlib-inline==0.1.6
 mdit-py-plugins==0.3.5
 mdurl==0.1.2
@@ -149,6 +149,7 @@ nbconvert==7.4.0
 nbformat==5.8.0
 nest-asyncio==1.5.6
 newspaper3k==0.2.8
+matplotlib.pyplot
 nltk==3.8.1
 notebook==6.5.4
 notebook_shim==0.2.3
