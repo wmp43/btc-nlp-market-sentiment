@@ -5,6 +5,7 @@ alembic
 altair
 annotated-types
 anyio
+xgboost
 apache-airflow
 apache-airflow-providers-common-sql
 apache-airflow-providers-ftp
