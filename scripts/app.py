@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from config import db_path, rapid_api, table2, clf_path, reg_path
+from config import db_path, rapid_api, table2, clf_path, reg_path, bucket_name, s3_object_key, local_file_name
 from data_ingestion import btc_fear_greed_idx
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -9,6 +9,9 @@ import matplotlib.dates as mdates
 from joblib import load
 from datetime import datetime, timedelta
 from model_dev import add_classifier_predictions
+from dotenv import load_dotenv
+import boto3
+load_dotenv()
 
 
 # Import other required libraries
@@ -25,18 +28,16 @@ def predictions_master(clf_model_path, reg_model_path, database_name, table):
     reg_predictions = reg_model.predict(fs)
     return reg_predictions[0]
 
+def download_file_from_s3(bucket_name, s3_object_key, local_file_name):
+    s3 = boto3.client('s3')
+    s3.download_file(bucket_name, s3_object_key, local_file_name)
 
-def db_query(database_path, table_name):
-    """
-    Get Data From DB to process for Model
-    """
-    conn = sqlite3.connect(database_path)
-    print('opened sqlite connection')
-    query = f'SELECT * FROM {table_name}'
-    df = pd.read_sql_query(query, conn)
-    conn.close()
-    print('closed sqlite connection')
-    return df
+
+download_file_from_s3(bucket_name, s3_object_key, local_file_name)
+
+conn = sqlite3.connect(local_file_name)
+query = "SELECT * FROM your_table_name"
+data = pd.read_sql_query(query, conn)
 
 
 st.set_page_config(layout="wide")  # This should be the first Streamlit command
@@ -46,9 +47,6 @@ st.sidebar.header('Navigation')
 selection = st.sidebar.radio("Go to",
                              ['About', 'Data Ingestion & Engineering', 'Feature Engineering', 'Data Visualization',
                               'Model Development', 'Predictions'])
-
-# Data Ingestion & Engineering, Feature Engineering, Model Development
-data = db_query(db_path, table2)
 
 if selection == 'Data Visualization':
     st.header("Data Visualization")

@@ -15,3 +15,8 @@ clf_path = 'models/xgb_clf_1.0.pkl'
 reg_path = 'models/xgb_reg_1.0.pkl'
 
 db_path: str = "db-backup/text-btc-db"
+
+
+bucket_name = 'btc-nlp'
+s3_object_key = 's3://btc-nlp/text-btc-db'
+local_file_name = 'ts-fe'
