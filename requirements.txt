@@ -3,6 +3,8 @@ aiohttp
 aiosignal
 alembic
 altair
+boto3
+dotenv
 annotated-types==0.5.0
 anyio==3.7.0
 apache-airflow==2.6.1
